@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id            String          @id @default(cuid())
+  email         String          @unique
+  name          String
+  emailVerified Boolean         @default(false) @map("email_verified")
+  image         String?
+  role          Role            @default(USER)
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  aiSessions    AiSession[]
+  authSessions  AuthSession[]
+  accounts      AuthAccount[]
+
+  @@map("users")
+}
+
+model AiSession {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   @map("user_id")
+  prompt    String
+  response  String
+  model     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("ai_sessions")
+}
+
+model AuthSession {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+
+  @@map("auth_sessions")
+}
+
+model AuthAccount {
+  id                     String   @id @default(cuid())
+  accountId              String   @map("account_id")
+  providerId             String   @map("provider_id")
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String   @map("user_id")
+  accessToken            String?  @map("access_token")
+  refreshToken           String?  @map("refresh_token")
+  idToken                String?  @map("id_token")
+  accessTokenExpiresAt   DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt  DateTime? @map("refresh_token_expires_at")
+  scope                  String?
+  password               String?
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@unique([providerId, accountId])
+  @@map("auth_accounts")
+}
+
+model AuthVerification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("auth_verifications")
+}
