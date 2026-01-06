@@ -13,59 +13,47 @@ const changePasswordSchema = z.object({
   revokeOtherSessions: z.boolean().optional(),
 });
 
-const requireUser = (req: Request, res: ExpressResponse): Express.User | null => {
-  if (!req.user) {
-    res.status(401).json({ message: "Unauthorized" });
-    return null;
+export const getProfile = asyncHandler(
+  async (req: Request, res: ExpressResponse): Promise<void> => {
+    res.json({ user: req.user });
   }
+);
 
-  return req.user;
-};
+export const listSessions = asyncHandler(
+  async (req: Request, res: ExpressResponse): Promise<void> => {
+    const sessions = await userService.listSessions(req.user!.id); // Non-null assertion since requireAuth ensures user is present
 
-export const getProfile = asyncHandler(async (req: Request, res: ExpressResponse): Promise<void> => {
-  res.json({ user: req.user });
-});
+    res.json({ sessions });
+  }
+);
 
-export const listSessions = asyncHandler(async (req: Request, res: ExpressResponse): Promise<void> => {
-  const user = requireUser(req, res);
-  if (!user) return;
+export const updateDisplayName = asyncHandler(
+  async (req: Request, res: ExpressResponse): Promise<void> => {
+    const { name } = updateNameSchema.parse(req.body);
+    const result = await userService.updateDisplayName(req.headers, name);
 
-  const sessions = await userService.listSessions(user.id);
+    res.json(result);
+  }
+);
 
-  res.json({ sessions });
-});
+export const changePassword = asyncHandler(
+  async (req: Request, res: ExpressResponse): Promise<void> => {
+    const { currentPassword, newPassword, revokeOtherSessions } =
+      changePasswordSchema.parse(req.body);
 
-export const updateDisplayName = asyncHandler(async (req: Request, res: ExpressResponse): Promise<void> => {
-  const user = requireUser(req, res);
-  if (!user) return;
+    const result = await userService.changePassword(req.headers, {
+      currentPassword,
+      newPassword,
+      revokeOtherSessions,
+    });
 
-  const { name } = updateNameSchema.parse(req.body);
+    res.json(result);
+  }
+);
 
-  const result = await userService.updateDisplayName(req.headers, name);
-
-  res.json(result);
-});
-
-export const changePassword = asyncHandler(async (req: Request, res: ExpressResponse): Promise<void> => {
-  const user = requireUser(req, res);
-  if (!user) return;
-
-  const { currentPassword, newPassword, revokeOtherSessions } = changePasswordSchema.parse(req.body);
-
-  const result = await userService.changePassword(req.headers, {
-    currentPassword,
-    newPassword,
-    revokeOtherSessions,
-  });
-
-  res.json(result);
-});
-
-export const signOut = asyncHandler(async (req: Request, res: ExpressResponse): Promise<void> => {
-  const user = requireUser(req, res);
-  if (!user) return;
-
-  const response = await userService.signOut(req.headers);
-
-  await userService.relayAuthResponse(res, response);
-});
+export const signOut = asyncHandler(
+  async (req: Request, res: ExpressResponse): Promise<void> => {
+    const response = await userService.signOut(req.headers);
+    await userService.relayAuthResponse(res, response);
+  }
+);
