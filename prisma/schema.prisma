@@ -24,6 +24,7 @@ model User {
   aiSessions    AiSession[]
   authSessions  AuthSession[]
   accounts      AuthAccount[]
+  reconstructRuns ReconstructRun[]
 
   @@map("users")
 }
@@ -85,3 +86,39 @@ model AuthVerification {
 
   @@map("auth_verifications")
 }
+
+// =========================
+// Week-1 MVP: minimum writes
+// =========================
+
+enum ReconstructStatus {
+  SUCCESS
+  FAILED
+}
+
+model ReconstructRun {
+  id        String            @id @default(cuid())
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String            @map("user_id")
+
+  status    ReconstructStatus @default(SUCCESS)
+  errorCode String?           @map("error_code")
+  errorMessage String?        @map("error_message")
+
+  // Client context
+  timezone  String
+  nowIso    String?           @map("now_iso")
+
+  // Input
+  rawText   String            @map("raw_text")
+
+  // One JSON snapshot of the validated schema output (TripReconstruction)
+  outputJson Json?            @map("output_json")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt])
+  @@map("reconstruct_runs")
+}
+
