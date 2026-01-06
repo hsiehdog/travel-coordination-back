@@ -1,0 +1,20 @@
+version: '3'
+services:
+  database:
+    image: pgvector/pgvector:pg17 # postgres with pgvector support
+    env_file:
+      - .env
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/ # persist data even if container shuts down
+  redis:
+    image: redis:6.0.6
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/var/lib/redis/data/
+# named volumes can be managed easier using docker-compose
+volumes:
+  postgres-data:
+  redis-data:
