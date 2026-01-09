@@ -21,6 +21,7 @@ type ReconstructServiceArgs = {
     timezone: string;
     nowIso?: string;
   };
+  tripId?: string;
 };
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -69,6 +70,7 @@ type RunData = Prisma.ReconstructRunUncheckedCreateInput;
 function buildRunBase(args: ReconstructServiceArgs) {
   return {
     userId: args.userId,
+    tripId: args.tripId ?? null,
     timezone: args.client.timezone,
     nowIso: args.client.nowIso ?? null,
     rawText: args.rawText,

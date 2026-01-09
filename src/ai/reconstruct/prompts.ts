@@ -11,6 +11,8 @@ Hard rules:
 - If you cannot infer, leave fields null and add a missingInfo[] prompt asking the user what to provide.
 - Do NOT claim precise travel time or distances. No maps or external APIs are available.
 - Deduplicate obvious duplicates referring to the same booking.
+- If multiple excerpts appear to describe the same event, consolidate into a single item and note the merge in assumptions[].
+- If duplicate excerpts conflict (time/location mismatch), do NOT silently pick one; keep uncertainty explicit in assumptions[] or missingInfo[].
 - Use client.timezone as the default timezone ONLY when an item timezone cannot be inferred from the text (e.g., airports or explicit city).
 
 DATE INFERENCE RULES (CRITICAL — to avoid null dates):
@@ -120,6 +122,7 @@ CRITICAL reminders:
 - localTime: 24h "HH:mm" only (no AM/PM). If time is vague, set localTime=null and iso=null.
 - If month/day is present but year is missing and nowIso is provided, infer the year when unambiguous and populate localDate/dateRange; record the inference in assumptions[].
 - isInferred=false for explicitly stated items; isInferred=true only for inferred/transformed facts (year/timezone/relative dates).
+- The raw text may contain repeated confirmations or overlapping notes; merge duplicates conservatively and record any consolidation or conflicts.
 
 Return JSON only.
 `.trim();
