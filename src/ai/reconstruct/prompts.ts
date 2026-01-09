@@ -110,7 +110,9 @@ Return ONE JSON object with fields:
 - destinationSummary (string)
 - dateRange { startLocalDate, endLocalDate, timezone }
 - days[]: { dayIndex, label, localDate, items[] }
-- items[]: { id, kind, title, start{localDate,localTime,timezone,iso}, end{...}, locationText, isInferred, confidence, sourceSnippet }
+- days[].items[] MUST contain full itinerary objects:
+  { id, kind, title, start{localDate,localTime,timezone,iso}, end{...}, locationText, isInferred, confidence, sourceSnippet }
+- Do NOT include a top-level items[] array.
 - risks[]: { severity, title, message, itemIds[] }
 - assumptions[]: { message, relatedItemIds[] }
 - missingInfo[]: { prompt, relatedItemIds[] }
