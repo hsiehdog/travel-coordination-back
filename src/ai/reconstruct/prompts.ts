@@ -63,6 +63,7 @@ FORMATTING & ENUMS (MUST follow exactly):
 - items[].kind MUST be ONE of (UPPERCASE): FLIGHT | LODGING | MEETING | MEAL | TRANSPORT | ACTIVITY | NOTE | OTHER
   - Examples: "flight" is INVALID, "FLIGHT" is valid. "HOTEL" -> LODGING. "DINNER" -> MEAL.
 - risks[].severity MUST be ONE of (UPPERCASE): LOW | MEDIUM | HIGH
+- meal.mealType MUST be one of: BREAKFAST | LUNCH | DINNER | DRINKS | OTHER (or null). Do NOT use "SNACK", "BRUNCH", "COFFEE", etc.
 - start.localTime and end.localTime MUST be 24-hour time formatted exactly "HH:mm" (two-digit hour), e.g. "07:05", "18:25".
   - Do NOT use "AM/PM". Do NOT use "7:05". Use "07:05".
   - If time is not explicit, use null.
@@ -70,10 +71,23 @@ FORMATTING & ENUMS (MUST follow exactly):
 - iso MUST be a full ISO datetime string or null.
   - Populate iso ONLY when you have localDate + localTime + timezone. Otherwise iso=null.
   - If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
+- For every DateTimeField (start, end, lodging.checkIn, lodging.checkOut), always include all keys: localDate, localTime, timezone, iso.
+  - If you don't know a value, use null. Do NOT omit keys or use undefined.
 - For flights, populate flight details when explicitly present (airlineName, airlineCode, flightNumber, origin, destination, pnr). Otherwise leave them null.
 - For lodging, populate lodging details when explicitly present (name, address, checkIn, checkOut, confirmationNumber). Otherwise leave them null.
 - For meetings, populate meeting details when explicitly present (organizer, attendees, videoLink, locationName). Otherwise leave them null.
 - For meals, populate meal details when explicitly present (venue, mealType, reservationName, confirmationNumber). Otherwise leave them null.
+
+Length limits (MUST):
+- tripTitle max 80 chars
+- executiveSummary max 200 chars
+- destinationSummary max 120 chars
+- day.label max 40 chars
+- item.title max 140 chars
+- locationText max 300 chars
+- sourceSnippet max 180 chars
+- risks.title max 80 chars, risks.message max 260 chars
+- assumptions.message max 500 chars, missingInfo.prompt max 300 chars
 
 Timezone rules:
 - If you can infer timezone from airport codes or city/state (e.g. SFO -> America/Los_Angeles, EWR/JFK + Manhattan -> America/New_York), do so.
@@ -82,12 +96,14 @@ Timezone rules:
 - Trip-level dateRange.timezone should usually be the destination timezone when most events occur there; otherwise use client.timezone.
 
 Quality rules:
-- executiveSummary must be 2–3 sentences, calm and professional. You may include ONE recommendation if justified by the schedule.
+- executiveSummary must be 1–2 sentences, calm and professional. You may include ONE recommendation if justified by the schedule.
 - days[] should be ordered and reflect chronology. If dates are unknown, group into Day 1 / Day 2 with localDate=null.
 - confidence scoring:
   - 0.9–1.0 = explicitly stated
   - 0.6–0.8 = strongly implied and explained
   - below 0.6 = avoid; prefer null + missingInfo
+- Avoid repeating data already present in structured fields (times, locations, flight numbers) inside summary/assumptions/missingInfo unless needed for clarity.
+- Keep sourceSnippet to a single short excerpt that proves the item; trim to the most relevant line.
 
 Return valid JSON (no trailing commas).
 `.trim();
@@ -111,7 +127,7 @@ ${args.rawText}
 Output requirements:
 Return ONE JSON object with fields:
 - tripTitle (string)
-- executiveSummary (string, 2–3 sentences)
+- executiveSummary (string, 1–2 sentences)
 - destinationSummary (string)
 - dateRange { startLocalDate, endLocalDate, timezone }
 - days[]: { dayIndex, label, localDate, items[] }
@@ -126,15 +142,19 @@ Return ONE JSON object with fields:
 CRITICAL reminders:
 - kind: UPPERCASE enum (FLIGHT|LODGING|MEETING|MEAL|TRANSPORT|ACTIVITY|NOTE|OTHER)
 - severity: UPPERCASE enum (LOW|MEDIUM|HIGH)
+- mealType: BREAKFAST|LUNCH|DINNER|DRINKS|OTHER (or null). If not explicit, use null.
 - localTime: 24h "HH:mm" only (no AM/PM). If time is vague, set localTime=null and iso=null.
 - If month/day is present but year is missing and nowIso is provided, infer the year when unambiguous and populate localDate/dateRange; record the inference in assumptions[].
 - isInferred=false for explicitly stated items; isInferred=true only for inferred/transformed facts (year/timezone/relative dates).
 - The raw text may contain repeated confirmations or overlapping notes; merge duplicates conservatively and record any consolidation or conflicts.
 - If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
+- DateTimeField objects must include all keys (localDate, localTime, timezone, iso) and use null for unknowns (never omit keys).
 - For flights, populate flight details when explicitly present (airlineName, airlineCode, flightNumber, origin, destination, pnr). Otherwise leave them null.
 - For lodging, populate lodging details when explicitly present (name, address, checkIn, checkOut, confirmationNumber). Otherwise leave them null.
 - For meetings, populate meeting details when explicitly present (organizer, attendees, videoLink, locationName). Otherwise leave them null.
 - For meals, populate meal details when explicitly present (venue, mealType, reservationName, confirmationNumber). Otherwise leave them null.
+- Keep summaries/assumptions/missingInfo concise and avoid repeating structured fields.
+- Keep sourceSnippet to a single short excerpt (<= 180 chars).
 
 Return JSON only.
 `.trim();
@@ -170,12 +190,14 @@ ${
 Common rules (apply when relevant to the issues above):
 - items[].kind: UPPERCASE enum (FLIGHT|LODGING|MEETING|MEAL|TRANSPORT|ACTIVITY|NOTE|OTHER)
 - risks[].severity: UPPERCASE enum (LOW|MEDIUM|HIGH)
+- meal.mealType: BREAKFAST|LUNCH|DINNER|DRINKS|OTHER (or null)
 - localTime: exactly "HH:mm" 24-hour time OR null
   - If the source text is vague ("morning", "around", "before noon"), set localTime=null and iso=null (do NOT invent a time).
 - localDate: "YYYY-MM-DD" OR null
   - If month/day is present and nowIso is provided, infer year when unambiguous and populate localDate/dateRange; record in assumptions[].
 - iso: ISO datetime string ONLY when localDate+localTime+timezone are present; otherwise null.
   - If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
+- DateTimeField objects must include all keys (localDate, localTime, timezone, iso) and use null for unknowns (never omit keys).
 
 isInferred correction (apply only if mentioned in Zod issues OR required to keep consistency after edits):
 - isInferred=false when key facts are explicitly stated.

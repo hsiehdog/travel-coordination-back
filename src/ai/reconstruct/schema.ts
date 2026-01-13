@@ -28,7 +28,7 @@ export const ItineraryItemSchema = z.object({
   locationText: z.string().max(300).nullable(),
   isInferred: z.boolean(),
   confidence: z.number().min(0).max(1),
-  sourceSnippet: z.string().max(300).nullable(),
+  sourceSnippet: z.string().max(180).nullable(),
   flight: z
     .object({
       airlineName: z.string().max(80).nullable(),
@@ -98,8 +98,8 @@ export const MissingInfoSchema = z.object({
 
 export const TripReconstructionSchema = z.object({
   tripTitle: z.string().min(1).max(80),
-  executiveSummary: z.string().min(1).max(500),
-  destinationSummary: z.string().min(1).max(500),
+  executiveSummary: z.string().min(1).max(200),
+  destinationSummary: z.string().min(1).max(120),
   dateRange: z.object({
     startLocalDate: Ymd.nullable(),
     endLocalDate: Ymd.nullable(),
