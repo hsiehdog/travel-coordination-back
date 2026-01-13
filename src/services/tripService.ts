@@ -12,6 +12,15 @@ type RenameTripInput = {
   title: string;
 };
 
+const MAX_RAW_TEXT_CHARS = 80_000;
+
+type RawTextTruncation = {
+  wasTruncated: boolean;
+  originalChars: number;
+  keptChars: number;
+  omittedChars: number;
+};
+
 type TripSummary = {
   id: string;
   title: string;
@@ -21,13 +30,37 @@ type TripSummary = {
   latestRunStatus: string | null;
 };
 
+function applyRawTextCap(rawText: string): {
+  cappedText: string;
+  truncation: RawTextTruncation | null;
+} {
+  if (rawText.length <= MAX_RAW_TEXT_CHARS) {
+    return { cappedText: rawText, truncation: null };
+  }
+
+  const omittedChars = rawText.length - MAX_RAW_TEXT_CHARS;
+  const notice = `[TRUNCATED ${omittedChars} chars]\n\n`;
+  const keepChars = Math.max(0, MAX_RAW_TEXT_CHARS - notice.length);
+  const tail = rawText.slice(rawText.length - keepChars);
+  const cappedText = notice + tail;
+
+  return {
+    cappedText,
+    truncation: {
+      wasTruncated: true,
+      originalChars: rawText.length,
+      keptChars: cappedText.length,
+      omittedChars,
+    },
+  };
+}
+
 export const tripService = {
   async createTrip(input: CreateTripInput) {
     return prisma.trip.create({
       data: {
         userId: input.userId,
         title: input.title,
-        sourceText: "",
       },
     });
   },
@@ -69,16 +102,33 @@ export const tripService = {
   async appendTripSource(userId: string, tripId: string, rawText: string) {
     const trip = await tripService.getTripOrThrow(userId, tripId);
     const trimmed = rawText.trim();
-    if (!trimmed) return trip;
 
-    const combined = trip.sourceText
-      ? `${trip.sourceText}\n\n---\n\n${trimmed}`
-      : trimmed;
-
-    return prisma.trip.update({
-      where: { id: tripId },
-      data: { sourceText: combined },
+    const latestSuccess = await prisma.reconstructRun.findFirst({
+      where: { tripId, userId, status: "SUCCESS" },
+      orderBy: { createdAt: "desc" },
+      select: { rawText: true },
     });
+
+    const latestAny = latestSuccess
+      ? null
+      : await prisma.reconstructRun.findFirst({
+          where: { tripId, userId },
+          orderBy: { createdAt: "desc" },
+          select: { rawText: true },
+        });
+
+    const previousRawText =
+      latestSuccess?.rawText ?? latestAny?.rawText ?? "";
+
+    const combinedRawText = trimmed
+      ? previousRawText
+        ? `${previousRawText}\n\n--- NEW INFO ---\n\n${trimmed}`
+        : trimmed
+      : previousRawText;
+
+    const { cappedText, truncation } = applyRawTextCap(combinedRawText);
+
+    return { trip, combinedRawText: cappedText, truncation };
   },
 
   async getTripDetail(userId: string, tripId: string) {
@@ -107,7 +157,35 @@ export const tripService = {
       },
     });
 
-    return { trip, latestRun, runs };
+    const tripItems = await prisma.tripItem.findMany({
+      where: { tripId },
+      orderBy: [{ startIso: "asc" }, { startLocalDate: "asc" }],
+      select: {
+        id: true,
+        kind: true,
+        title: true,
+        startIso: true,
+        endIso: true,
+        timezone: true,
+        startTimezone: true,
+        endTimezone: true,
+        startLocalDate: true,
+        startLocalTime: true,
+        endLocalDate: true,
+        endLocalTime: true,
+        locationText: true,
+        isInferred: true,
+        confidence: true,
+        sourceSnippet: true,
+        state: true,
+        source: true,
+        fingerprint: true,
+        metadata: true,
+        updatedAt: true,
+      },
+    });
+
+    return { trip, latestRun, runs, tripItems };
   },
 
   async renameTrip(input: RenameTripInput) {

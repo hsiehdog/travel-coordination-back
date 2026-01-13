@@ -13,6 +13,11 @@ import { z } from "zod";
 import prisma from "../lib/prisma";
 import { Prisma } from "@prisma/client";
 import env from "../config/env";
+import {
+  buildTripItemDrafts,
+  type TripItemDraft,
+} from "../mappers/tripItemMapper";
+import { logger } from "../utils/logger";
 
 type ReconstructServiceArgs = {
   userId: string;
@@ -22,6 +27,12 @@ type ReconstructServiceArgs = {
     nowIso?: string;
   };
   tripId?: string;
+  inputMeta?: {
+    rawTextTruncated?: boolean;
+    rawTextOriginalChars?: number;
+    rawTextKeptChars?: number;
+    rawTextOmittedChars?: number;
+  };
 };
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -92,6 +103,40 @@ function toErrorCode(err: any) {
 
 function asJson(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
+}
+
+function buildOutputJson(
+  result: TripReconstruction,
+  inputMeta?: ReconstructServiceArgs["inputMeta"]
+): Prisma.InputJsonValue {
+  if (inputMeta?.rawTextTruncated) {
+    return asJson({
+      ...result,
+      _meta: {
+        rawText: inputMeta,
+      },
+    });
+  }
+  return asJson(result);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeMetadata(
+  existing: unknown,
+  runId: string,
+  aiDetails: Record<string, unknown> | null
+): Prisma.InputJsonValue {
+  const base = isPlainObject(existing) ? { ...existing } : {};
+  const existingAi = isPlainObject(base.ai) ? (base.ai as Record<string, unknown>) : {};
+  const nextAi = aiDetails ? { ...existingAi, ...aiDetails } : existingAi;
+  return {
+    ...base,
+    ...(aiDetails ? { ai: nextAi } : {}),
+    lastUpdatedByRunId: runId,
+  };
 }
 
 type AttemptDebug = {
@@ -207,6 +252,7 @@ export async function reconstructService(
   let runData: RunData | null = null;
 
   // Do all model work first, then persist in finally.
+  const startMs = Date.now();
   const attempt = await runOnceWithRepair({
     system,
     userPrompt,
@@ -219,6 +265,8 @@ export async function reconstructService(
         zodIssues,
       }),
   });
+  const durationMs = Date.now() - startMs;
+  logger.info("LLM reconstruction duration (ms)", { durationMs });
 
   try {
     if (attempt.ok) {
@@ -227,7 +275,7 @@ export async function reconstructService(
       runData = {
         ...base,
         status: "SUCCESS",
-        outputJson: result as unknown as Prisma.InputJsonValue,
+        outputJson: buildOutputJson(result, args.inputMeta),
         errorCode: null,
         errorMessage: null,
       };
@@ -244,6 +292,7 @@ export async function reconstructService(
           stage: caughtError?.stage ?? "unknown",
           code: toErrorCode(caughtError),
           message: toPublicMessage(caughtError),
+          inputMeta: args.inputMeta ?? null,
           attempt1: {
             modelOutput: attempt.attempt1.modelOutput
               ? truncate(attempt.attempt1.modelOutput)
@@ -272,7 +321,19 @@ export async function reconstructService(
       persistError = new Error("Reconstruction did not produce run data.");
     } else {
       try {
-        await prisma.reconstructRun.create({ data: runData });
+        if (attempt.ok && result && args.tripId) {
+          await prisma.$transaction(async (tx) => {
+            const run = await tx.reconstructRun.create({ data: runData! });
+            const items = buildTripItemDrafts({
+              tripId: args.tripId!,
+              reconstruction: result!,
+              runId: run.id,
+            });
+            await upsertTripItems(tx, items, run.id);
+          });
+        } else {
+          await prisma.reconstructRun.create({ data: runData });
+        }
       } catch (err) {
         persistError = err;
       }
@@ -289,4 +350,74 @@ export async function reconstructService(
     throw new Error("Reconstruction succeeded but no result was produced.");
 
   return result;
+}
+
+async function upsertTripItems(
+  tx: Prisma.TransactionClient,
+  items: TripItemDraft[],
+  runId: string
+) {
+  for (const item of items) {
+    const existing = await tx.tripItem.findUnique({
+      where: {
+        tripId_fingerprint: {
+          tripId: item.tripId,
+          fingerprint: item.fingerprint,
+        },
+      },
+      select: {
+        id: true,
+        metadata: true,
+      },
+    });
+
+    if (existing) {
+      await tx.tripItem.update({
+        where: { id: existing.id },
+        data: {
+          kind: item.kind,
+          title: item.title,
+          startIso: item.startIso,
+          endIso: item.endIso,
+          timezone: item.timezone,
+          startTimezone: item.startTimezone,
+          endTimezone: item.endTimezone,
+          startLocalDate: item.startLocalDate,
+          startLocalTime: item.startLocalTime,
+          endLocalDate: item.endLocalDate,
+          endLocalTime: item.endLocalTime,
+          locationText: item.locationText,
+          isInferred: item.isInferred,
+          confidence: item.confidence,
+          sourceSnippet: item.sourceSnippet,
+          metadata: mergeMetadata(existing.metadata, runId, item.aiDetails),
+        },
+      });
+    } else {
+      await tx.tripItem.create({
+        data: {
+          trip: { connect: { id: item.tripId } },
+          kind: item.kind,
+          title: item.title,
+          startIso: item.startIso,
+          endIso: item.endIso,
+          timezone: item.timezone,
+          startTimezone: item.startTimezone,
+          endTimezone: item.endTimezone,
+          startLocalDate: item.startLocalDate,
+          startLocalTime: item.startLocalTime,
+          endLocalDate: item.endLocalDate,
+          endLocalTime: item.endLocalTime,
+          locationText: item.locationText,
+          isInferred: item.isInferred,
+          confidence: item.confidence,
+          sourceSnippet: item.sourceSnippet,
+          fingerprint: item.fingerprint,
+          metadata: item.metadata ?? { lastUpdatedByRunId: runId },
+          state: "PROPOSED",
+          source: "AI",
+        },
+      });
+    }
+  }
 }

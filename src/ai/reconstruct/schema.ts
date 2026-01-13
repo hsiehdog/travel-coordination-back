@@ -25,10 +25,51 @@ export const ItineraryItemSchema = z.object({
   title: z.string().min(1).max(140),
   start: DateTimeFieldSchema,
   end: DateTimeFieldSchema,
-  locationText: z.string().max(180).nullable(),
+  locationText: z.string().max(300).nullable(),
   isInferred: z.boolean(),
   confidence: z.number().min(0).max(1),
-  sourceSnippet: z.string().max(260).nullable(),
+  sourceSnippet: z.string().max(300).nullable(),
+  flight: z
+    .object({
+      airlineName: z.string().max(80).nullable(),
+      airlineCode: z.string().max(10).nullable(),
+      flightNumber: z.string().max(12).nullable(),
+      origin: z.string().max(12).nullable(),
+      destination: z.string().max(12).nullable(),
+      pnr: z.string().max(20).nullable(),
+    })
+    .nullable()
+    .optional(),
+  lodging: z
+    .object({
+      name: z.string().max(120).nullable(),
+      address: z.string().max(180).nullable(),
+      checkIn: DateTimeFieldSchema.nullable(),
+      checkOut: DateTimeFieldSchema.nullable(),
+      confirmationNumber: z.string().max(40).nullable(),
+    })
+    .nullable()
+    .optional(),
+  meeting: z
+    .object({
+      organizer: z.string().max(120).nullable(),
+      attendees: z.array(z.string().max(120)).max(20).nullable(),
+      videoLink: z.string().max(260).nullable(),
+      locationName: z.string().max(140).nullable(),
+    })
+    .nullable()
+    .optional(),
+  meal: z
+    .object({
+      venue: z.string().max(140).nullable(),
+      mealType: z
+        .enum(["BREAKFAST", "LUNCH", "DINNER", "DRINKS", "OTHER"])
+        .nullable(),
+      reservationName: z.string().max(120).nullable(),
+      confirmationNumber: z.string().max(40).nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const TripDaySchema = z.object({

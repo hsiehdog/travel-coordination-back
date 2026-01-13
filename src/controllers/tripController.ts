@@ -69,6 +69,7 @@ export const getTripDetail = asyncHandler(
       },
       latestRun: detail.latestRun,
       runs: detail.runs,
+      tripItems: detail.tripItems,
     });
   }
 );
@@ -83,17 +84,26 @@ export const reconstructIntoTrip = asyncHandler(
     const paramsParsed = ReconstructInTripParamSchema.parse(req.params);
     const tripId = paramsParsed.tripId;
 
-    const trip = await tripService.appendTripSource(
-      req.user!.id,
-      tripId,
-      parsed.rawText
-    );
+    const { trip, combinedRawText, truncation } =
+      await tripService.appendTripSource(
+        req.user!.id,
+        tripId,
+        parsed.rawText
+      );
 
     const reconstruction = await reconstructService({
       userId: req.user!.id,
-      rawText: trip.sourceText,
+      rawText: combinedRawText,
       client: parsed.client,
       tripId,
+      inputMeta: truncation
+        ? {
+            rawTextTruncated: true,
+            rawTextOriginalChars: truncation.originalChars,
+            rawTextKeptChars: truncation.keptChars,
+            rawTextOmittedChars: truncation.omittedChars,
+          }
+        : undefined,
     });
 
     if (trip.title.trim() === "Untitled Trip") {

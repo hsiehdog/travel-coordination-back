@@ -18,20 +18,46 @@ enum TripStatus {
   ARCHIVED
 }
 
+enum TripItemKind {
+  FLIGHT
+  LODGING
+  MEETING
+  MEAL
+  TRANSPORT
+  ACTIVITY
+  NOTE
+  OTHER
+}
+
+enum TripItemState {
+  PROPOSED
+  CONFIRMED
+  DISMISSED
+}
+
+enum TripItemSource {
+  AI
+  USER
+  CALENDAR
+  EMAIL
+}
+
 model User {
-  id            String          @id @default(cuid())
-  email         String          @unique
-  name          String
-  emailVerified Boolean         @default(false) @map("email_verified")
-  image         String?
-  role          Role            @default(USER)
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-  aiSessions    AiSession[]
-  authSessions  AuthSession[]
-  accounts      AuthAccount[]
+  id              String         @id @default(cuid())
+  email           String         @unique
+  name            String
+  emailVerified   Boolean        @default(false) @map("email_verified")
+  image           String?
+  role            Role           @default(USER)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  aiSessions      AiSession[]
+  authSessions    AuthSession[]
+  accounts        AuthAccount[]
+
   reconstructRuns ReconstructRun[]
-  trips         Trip[]
+  trips           Trip[]
 
   @@map("users")
 }
@@ -64,20 +90,20 @@ model AuthSession {
 }
 
 model AuthAccount {
-  id                     String   @id @default(cuid())
-  accountId              String   @map("account_id")
-  providerId             String   @map("provider_id")
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId                 String   @map("user_id")
-  accessToken            String?  @map("access_token")
-  refreshToken           String?  @map("refresh_token")
-  idToken                String?  @map("id_token")
+  id                     String    @id @default(cuid())
+  accountId              String    @map("account_id")
+  providerId             String    @map("provider_id")
+  user                   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                 String    @map("user_id")
+  accessToken            String?   @map("access_token")
+  refreshToken           String?   @map("refresh_token")
+  idToken                String?   @map("id_token")
   accessTokenExpiresAt   DateTime? @map("access_token_expires_at")
   refreshTokenExpiresAt  DateTime? @map("refresh_token_expires_at")
   scope                  String?
   password               String?
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   @@unique([providerId, accountId])
   @@map("auth_accounts")
@@ -95,7 +121,7 @@ model AuthVerification {
 }
 
 // =========================
-// Week-1 MVP: minimum writes
+// Reconstruction runs (audit)
 // =========================
 
 enum ReconstructStatus {
@@ -104,49 +130,111 @@ enum ReconstructStatus {
 }
 
 model ReconstructRun {
-  id        String            @id @default(cuid())
+  id           String            @id @default(cuid())
 
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String            @map("user_id")
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String            @map("user_id")
 
-  trip      Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
-  tripId    String?           @map("trip_id")
+  trip         Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  tripId       String?           @map("trip_id")
 
-  status    ReconstructStatus @default(SUCCESS)
-  errorCode String?           @map("error_code")
-  errorMessage String?        @map("error_message")
+  status       ReconstructStatus @default(SUCCESS)
+  errorCode    String?           @map("error_code")
+  errorMessage String?           @map("error_message")
 
   // Client context
-  timezone  String
-  nowIso    String?           @map("now_iso")
+  timezone     String
+  nowIso       String?           @map("now_iso")
 
   // Input
-  rawText   String            @map("raw_text")
+  rawText      String            @map("raw_text")
 
-  // One JSON snapshot of the validated schema output (TripReconstruction)
-  outputJson Json?            @map("output_json")
+  // Snapshot of validated TripReconstruction (includes assumptions/risks/missingInfo)
+  outputJson   Json?             @map("output_json")
 
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt    DateTime          @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
   @@index([tripId])
   @@map("reconstruct_runs")
 }
 
+// =========================
+// Trips (persistent container)
+// =========================
+
 model Trip {
   id        String     @id @default(cuid())
+
   userId    String     @map("user_id")
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   title     String
   status    TripStatus @default(DRAFT)
-  sourceText String    @default("") @map("source_text") @db.Text
 
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
   runs      ReconstructRun[]
+  items     TripItem[]
 
   @@index([userId, createdAt])
   @@map("trips")
+}
+
+// =========================
+// Trip Items (canonical events)
+// =========================
+
+model TripItem {
+  id             String         @id @default(cuid())
+
+  tripId         String         @map("trip_id")
+  trip           Trip           @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  kind           TripItemKind
+  title          String
+
+  // Canonical time fields (query/sort)
+  startIso       String?        @map("start_iso")
+  endIso         String?        @map("end_iso")
+  timezone       String?        @map("timezone")
+  startTimezone  String?        @map("start_timezone")
+  endTimezone    String?        @map("end_timezone")
+
+  // Local components (display / when iso is null)
+  startLocalDate String?        @map("start_local_date")
+  startLocalTime String?        @map("start_local_time")
+  endLocalDate   String?        @map("end_local_date")
+  endLocalTime   String?        @map("end_local_time")
+
+  locationText   String?        @map("location_text")
+
+  // Trust primitives for UI
+  isInferred      Boolean       @default(false) @map("is_inferred")
+  confidence      Float         @default(0.0)
+  sourceSnippet   String?       @map("source_snippet")
+
+  // Workflow
+  state          TripItemState  @default(PROPOSED)
+  source         TripItemSource @default(AI)
+
+  // Deterministic identity across runs
+  fingerprint    String         @map("fingerprint")
+
+  // Flexible, heterogeneous, optional fields:
+  // - flight airline/number, PNR, airports
+  // - hotel confirmation, address
+  // - meeting attendees/link
+  // - lat/lng + precision + source
+  // - external IDs (google event id)
+  // - item-specific notes
+  metadata       Json?          @map("metadata")
+
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@index([tripId, updatedAt])
+  @@unique([tripId, fingerprint])
+  @@map("trip_items")
 }

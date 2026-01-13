@@ -69,6 +69,11 @@ FORMATTING & ENUMS (MUST follow exactly):
 - localDate MUST be "YYYY-MM-DD" or null.
 - iso MUST be a full ISO datetime string or null.
   - Populate iso ONLY when you have localDate + localTime + timezone. Otherwise iso=null.
+  - If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
+- For flights, populate flight details when explicitly present (airlineName, airlineCode, flightNumber, origin, destination, pnr). Otherwise leave them null.
+- For lodging, populate lodging details when explicitly present (name, address, checkIn, checkOut, confirmationNumber). Otherwise leave them null.
+- For meetings, populate meeting details when explicitly present (organizer, attendees, videoLink, locationName). Otherwise leave them null.
+- For meals, populate meal details when explicitly present (venue, mealType, reservationName, confirmationNumber). Otherwise leave them null.
 
 Timezone rules:
 - If you can infer timezone from airport codes or city/state (e.g. SFO -> America/Los_Angeles, EWR/JFK + Manhattan -> America/New_York), do so.
@@ -111,7 +116,7 @@ Return ONE JSON object with fields:
 - dateRange { startLocalDate, endLocalDate, timezone }
 - days[]: { dayIndex, label, localDate, items[] }
 - days[].items[] MUST contain full itinerary objects:
-  { id, kind, title, start{localDate,localTime,timezone,iso}, end{...}, locationText, isInferred, confidence, sourceSnippet }
+  { id, kind, title, start{localDate,localTime,timezone,iso}, end{...}, locationText, isInferred, confidence, sourceSnippet, flight?, lodging?, meeting?, meal? }
 - Do NOT include a top-level items[] array.
 - risks[]: { severity, title, message, itemIds[] }
 - assumptions[]: { message, relatedItemIds[] }
@@ -125,6 +130,11 @@ CRITICAL reminders:
 - If month/day is present but year is missing and nowIso is provided, infer the year when unambiguous and populate localDate/dateRange; record the inference in assumptions[].
 - isInferred=false for explicitly stated items; isInferred=true only for inferred/transformed facts (year/timezone/relative dates).
 - The raw text may contain repeated confirmations or overlapping notes; merge duplicates conservatively and record any consolidation or conflicts.
+- If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
+- For flights, populate flight details when explicitly present (airlineName, airlineCode, flightNumber, origin, destination, pnr). Otherwise leave them null.
+- For lodging, populate lodging details when explicitly present (name, address, checkIn, checkOut, confirmationNumber). Otherwise leave them null.
+- For meetings, populate meeting details when explicitly present (organizer, attendees, videoLink, locationName). Otherwise leave them null.
+- For meals, populate meal details when explicitly present (venue, mealType, reservationName, confirmationNumber). Otherwise leave them null.
 
 Return JSON only.
 `.trim();
@@ -165,6 +175,7 @@ Common rules (apply when relevant to the issues above):
 - localDate: "YYYY-MM-DD" OR null
   - If month/day is present and nowIso is provided, infer year when unambiguous and populate localDate/dateRange; record in assumptions[].
 - iso: ISO datetime string ONLY when localDate+localTime+timezone are present; otherwise null.
+  - If iso is present, it MUST match localDate + localTime + timezone exactly. If unsure, set iso=null.
 
 isInferred correction (apply only if mentioned in Zod issues OR required to keep consistency after edits):
 - isInferred=false when key facts are explicitly stated.
