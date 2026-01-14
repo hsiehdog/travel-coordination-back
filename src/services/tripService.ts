@@ -134,7 +134,7 @@ export const tripService = {
   async getTripDetail(userId: string, tripId: string) {
     const trip = await tripService.getTripOrThrow(userId, tripId);
 
-    const latestRun = await prisma.reconstructRun.findFirst({
+    let latestRun = await prisma.reconstructRun.findFirst({
       where: { tripId, status: "SUCCESS" },
       orderBy: { createdAt: "desc" },
       select: {
@@ -144,6 +144,29 @@ export const tripService = {
         outputJson: true,
       },
     });
+
+    const output = latestRun?.outputJson as { type?: string } | null;
+    if (output?.type === "PATCH") {
+      latestRun = await prisma.reconstructRun.findFirst({
+        where: {
+          tripId,
+          status: "SUCCESS",
+          NOT: {
+            outputJson: {
+              path: ["type"],
+              equals: "PATCH",
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          outputJson: true,
+        },
+      });
+    }
 
     const runs = await prisma.reconstructRun.findMany({
       where: { tripId },
@@ -186,6 +209,37 @@ export const tripService = {
     });
 
     return { trip, latestRun, runs, tripItems };
+  },
+
+  async getTripItems(userId: string, tripId: string) {
+    await tripService.getTripOrThrow(userId, tripId);
+    return prisma.tripItem.findMany({
+      where: { tripId },
+      orderBy: [{ startIso: "asc" }, { startLocalDate: "asc" }],
+      select: {
+        id: true,
+        kind: true,
+        title: true,
+        startIso: true,
+        endIso: true,
+        timezone: true,
+        startTimezone: true,
+        endTimezone: true,
+        startLocalDate: true,
+        startLocalTime: true,
+        endLocalDate: true,
+        endLocalTime: true,
+        locationText: true,
+        isInferred: true,
+        confidence: true,
+        sourceSnippet: true,
+        state: true,
+        source: true,
+        fingerprint: true,
+        metadata: true,
+        updatedAt: true,
+      },
+    });
   },
 
   async renameTrip(input: RenameTripInput) {

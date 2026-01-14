@@ -67,13 +67,30 @@ function getTimeZoneOffsetMinutes(timeZone: string, date: Date): number {
     values[part.type] = Number(part.value);
   });
 
+  const year = values.year;
+  const month = values.month;
+  const day = values.day;
+  const hour = values.hour;
+  const minute = values.minute;
+  const second = values.second;
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined
+  ) {
+    return 0;
+  }
+
   const asUtc = Date.UTC(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second
+    year,
+    month - 1,
+    day,
+    hour,
+    minute,
+    second
   );
   return (asUtc - date.getTime()) / 60000;
 }

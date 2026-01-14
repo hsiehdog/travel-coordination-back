@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { reconstructService } from "../services/reconstructService";
+import { ingestTripUpdate } from "../services/ingestService";
 import { tripService } from "../services/tripService";
 
 const CreateTripSchema = z.object({
@@ -18,6 +19,15 @@ const ReconstructInTripSchema = z.object({
     timezone: z.string().min(1),
     nowIso: z.string().min(1).optional(),
   }),
+});
+
+const IngestTripSchema = z.object({
+  rawUpdateText: z.string().min(1).max(250_000),
+  client: z.object({
+    timezone: z.string().min(1),
+    nowIso: z.string().min(1).optional(),
+  }),
+  mode: z.enum(["patch", "rebuild"]).optional(),
 });
 
 export const createTrip = asyncHandler(
@@ -115,6 +125,24 @@ export const reconstructIntoTrip = asyncHandler(
     }
 
     res.status(200).json(reconstruction);
+  }
+);
+
+export const ingestTripDetails = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const parsed = IngestTripSchema.parse(req.body);
+    const paramsParsed = ReconstructInTripParamSchema.parse(req.params);
+    const tripId = paramsParsed.tripId;
+
+    const response = await ingestTripUpdate({
+      userId: req.user!.id,
+      tripId,
+      rawUpdateText: parsed.rawUpdateText,
+      client: parsed.client,
+      mode: parsed.mode,
+    });
+
+    res.status(200).json(response);
   }
 );
 

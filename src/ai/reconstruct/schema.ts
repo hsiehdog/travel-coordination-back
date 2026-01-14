@@ -98,7 +98,7 @@ export const MissingInfoSchema = z.object({
 
 export const TripReconstructionSchema = z.object({
   tripTitle: z.string().min(1).max(80),
-  executiveSummary: z.string().min(1).max(200),
+  executiveSummary: z.string().min(1).max(300),
   destinationSummary: z.string().min(1).max(120),
   dateRange: z.object({
     startLocalDate: Ymd.nullable(),

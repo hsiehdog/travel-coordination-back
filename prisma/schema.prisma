@@ -32,6 +32,7 @@ enum TripItemKind {
 enum TripItemState {
   PROPOSED
   CONFIRMED
+  CANCELLED
   DISMISSED
 }
 
@@ -129,6 +130,13 @@ enum ReconstructStatus {
   FAILED
 }
 
+enum PendingActionIntent {
+  UPDATE
+  CANCEL
+  REPLACE
+  UNKNOWN
+}
+
 model ReconstructRun {
   id           String            @id @default(cuid())
 
@@ -160,6 +168,28 @@ model ReconstructRun {
 }
 
 // =========================
+// Pending Actions (clarification)
+// =========================
+
+model PendingAction {
+  id            String              @id @default(cuid())
+
+  trip          Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  tripId        String              @map("trip_id")
+
+  intentType    PendingActionIntent @default(UNKNOWN) @map("intent_type")
+  rawUpdateText String              @map("raw_update_text")
+  candidates    Json                @map("candidates")
+  payload       Json?               @map("payload")
+
+  createdAt     DateTime            @default(now()) @map("created_at")
+  expiresAt     DateTime?           @map("expires_at")
+
+  @@index([tripId, createdAt])
+  @@map("pending_actions")
+}
+
+// =========================
 // Trips (persistent container)
 // =========================
 
@@ -176,6 +206,7 @@ model Trip {
   updatedAt DateTime   @updatedAt @map("updated_at")
 
   runs      ReconstructRun[]
+  pendingActions PendingAction[]
   items     TripItem[]
 
   @@index([userId, createdAt])

@@ -80,7 +80,7 @@ FORMATTING & ENUMS (MUST follow exactly):
 
 Length limits (MUST):
 - tripTitle max 80 chars
-- executiveSummary max 200 chars
+- executiveSummary max 300 chars
 - destinationSummary max 120 chars
 - day.label max 40 chars
 - item.title max 140 chars
@@ -191,6 +191,7 @@ Common rules (apply when relevant to the issues above):
 - items[].kind: UPPERCASE enum (FLIGHT|LODGING|MEETING|MEAL|TRANSPORT|ACTIVITY|NOTE|OTHER)
 - risks[].severity: UPPERCASE enum (LOW|MEDIUM|HIGH)
 - meal.mealType: BREAKFAST|LUNCH|DINNER|DRINKS|OTHER (or null)
+- executiveSummary max 300 chars
 - localTime: exactly "HH:mm" 24-hour time OR null
   - If the source text is vague ("morning", "around", "before noon"), set localTime=null and iso=null (do NOT invent a time).
 - localDate: "YYYY-MM-DD" OR null

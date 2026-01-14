@@ -153,11 +153,11 @@ function mergeMetadata(
   const base = isPlainObject(existing) ? { ...existing } : {};
   const existingAi = isPlainObject(base.ai) ? (base.ai as Record<string, unknown>) : {};
   const nextAi = aiDetails ? { ...existingAi, ...aiDetails } : existingAi;
-  return {
+  return asJson({
     ...base,
     ...(aiDetails ? { ai: nextAi } : {}),
     lastUpdatedByRunId: runId,
-  };
+  });
 }
 
 type AttemptDebug = {
